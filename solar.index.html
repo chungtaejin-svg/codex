@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="ko">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>태양광 패널 설계 도구</title>
+    <link rel="stylesheet" href="style.css?v=20260212d">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700&display=swap"
+        rel="stylesheet">
+    <script type="text/javascript" src="//dapi.kakao.com/v2/maps/sdk.js?appkey=aeeedd731d4bd2857a7bfc6db4fd51e1&libraries=services"></script>
+    <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+</head>
+
+<body>
+    <div class="container">
+        <header>
+            <h1>🌞 태양광 패널 설계 도구</h1>
+            <p class="subtitle">위성사진에 태양광 패널 레이아웃을 그려보세요</p>
+        </header>
+
+        <div class="main-content">
+            <!-- 좌측 패널: 컨트롤 -->
+            <aside class="control-panel">
+                <div class="panel-section">
+                    <h2>📍 주소 검색</h2>
+                    <div class="address-search">
+                        <input type="text" id="addressInput" placeholder="주소를 입력하세요 (예: 강원도 양양군 현남면)">
+                        <button class="search-btn" id="searchBtn">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2">
+                                <circle cx="11" cy="11" r="8"></circle>
+                                <path d="m21 21-4.35-4.35"></path>
+                            </svg>
+                            검색
+                        </button>
+                    </div>
+                    <div class="control-group">
+                        <label for="zoomLevel">확대 수준 (1-7)</label>
+                        <input type="range" id="zoomLevel" value="2" min="1" max="7" step="1">
+                        <span class="value-display" id="zoomValue">2</span>
+                        <small>낮을수록 더 자세한 이미지 (카카오맵 레벨)</small>
+                    </div>
+                    <div class="api-key-info">
+                        <small>💡 카카오 개발자 API 키가 필요합니다</small>
+                    </div>
+
+                    <div class="panel-section">
+                        <h2>📊 수동 스케일/위도</h2>
+                        <div class="control-group">
+                            <label for="manualScale">1픽셀 당 미터 (m/px)</label>
+                            <input type="number" id="manualScale" value="0.30" min="0.01" max="10" step="0.01">
+                            <small>정확한 면적 측정을 위해 필요</small>
+                        </div>
+                        <div class="control-group">
+                            <label for="manualLatitude">위도 (보정용)</label>
+                            <input type="number" id="manualLatitude" placeholder="37.0" min="-90" max="90" step="0.0001">
+                            <small>위도에 따른 지도 스케일 보정</small>
+                        </div>
+                        <div class="control-group">
+                            <label for="helperPixels">측정 픽셀 거리 (px)</label>
+                            <input type="number" id="helperPixels" placeholder="예: 200">
+                        </div>
+                        <div class="control-group">
+                            <label for="helperMeters">실제 미터 거리 (m)</label>
+                            <input type="number" id="helperMeters" placeholder="예: 50">
+                        </div>
+                        <button class="action-btn" id="calculateScale" style="margin-top: 10px;">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
+                            </svg>
+                            스케일 계산 도우미
+                        </button>
+                    </div>
+
+                </div>
+
+                <div class="panel-section">
+                    <h2>⚙️ 패널 설정</h2>
+
+                    <div class="control-group">
+                        <label for="panelPreset">패널 모델 선택</label>
+                        <select id="panelPreset">
+                            <option value="custom" hidden>직접 입력</option>
+                        </select>
+                        
+                        <div style="margin-top: 5px;">
+                            <button id="showAddPanelModalBtn" style="width: 100%; padding: 8px; background: #e5e7eb; color: #374151; border: 1px dashed #9ca3af; border-radius: 6px; cursor: pointer; font-size: 13px; transition: all 0.2s;">
+                                ➕ 새 모델 추가
+                            </button>
+                        </div>
+                        <div style="margin-top: 8px;">
+                            <button id="deleteSelectedPanelBtn" style="width: 100%; padding: 8px; background: #fee2e2; color: #991b1b; border: 1px solid #fecaca; border-radius: 6px; cursor: pointer; font-size: 13px; transition: all 0.2s;">
+                                🗑️ 선택 모델 삭제 (v20260213u)
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Custom Panel Modal -->
+                    <div id="addPanelModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000; align-items: center; justify-content: center;">
+                        <div style="background: white; padding: 20px; border-radius: 12px; width: 320px; box-shadow: 0 10px 25px rgba(0,0,0,0.2);">
+                            <h3 style="margin-top: 0; margin-bottom: 15px; font-size: 18px; color: #111827;">새 패널 모델 추가</h3>
+                            
+                            <div style="margin-bottom: 12px;">
+                                <label style="display: block; font-size: 13px; font-weight: bold; margin-bottom: 4px; color: #374151;">모델명</label>
+                                <input type="text" id="modalModelName" placeholder="예: 신규 패널 700W" style="width: 100%; padding: 8px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 14px;">
+                            </div>
+                            <div style="margin-bottom: 12px;">
+                                <label style="display: block; font-size: 13px; font-weight: bold; margin-bottom: 4px; color: #374151;">회사명</label>
+                                <input type="text" id="modalCompanyName" placeholder="예: 한화큐셀" style="width: 100%; padding: 8px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 14px;">
+                            </div>
+                            
+                            <div style="display: flex; gap: 10px; margin-bottom: 12px;">
+                                <div style="flex: 1;">
+                                    <label style="display: block; font-size: 13px; font-weight: bold; margin-bottom: 4px; color: #374151;">가로 (mm)</label>
+                                    <input type="number" id="modalWidth" placeholder="2278" style="width: 100%; padding: 8px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 14px;">
+                                </div>
+                                <div style="flex: 1;">
+                                    <label style="display: block; font-size: 13px; font-weight: bold; margin-bottom: 4px; color: #374151;">세로 (mm)</label>
+                                    <input type="number" id="modalHeight" placeholder="1134" style="width: 100%; padding: 8px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 14px;">
+                                </div>
+                            </div>
+                            
+                            <div style="margin-bottom: 20px;">
+                                <label style="display: block; font-size: 13px; font-weight: bold; margin-bottom: 4px; color: #374151;">출력 (W)</label>
+                                <input type="number" id="modalPower" placeholder="600" style="width: 100%; padding: 8px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 14px;">
+                            </div>
+                            
+                            <div style="display: flex; gap: 8px; justify-content: flex-end;">
+                                <button id="closeModalBtn" style="padding: 8px 12px; background: #f3f4f6; color: #4b5563; border: none; border-radius: 6px; cursor: pointer; font-weight: bold;">취소</button>
+                                <button id="saveModelBtn" style="padding: 8px 12px; background: #2563eb; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold;">저장</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="control-group">
+                        <label for="panelWidth">패널 폭 (mm)</label>
+                        <input type="number" id="panelWidth" value="2278" min="100" max="5000" step="1">
+                    </div>
+
+                    <div class="control-group">
+                        <label for="panelHeight">패널 높이 (mm)</label>
+                        <input type="number" id="panelHeight" value="1134" min="100" max="5000" step="1">
+                    </div>
+
+                    <div class="control-group">
+                        <label for="panelPower">패널 출력 (W)</label>
+                        <input type="number" id="panelPower" value="640" min="100" max="1000" step="10">
+                    </div>
+
+                    <div class="control-group">
+                        <label for="gridRows">그리드 행</label>
+                        <input type="number" id="gridRows" value="8" min="1" max="100" step="1">
+                    </div>
+                    <div class="control-group">
+                        <label for="gridCols">그리드 열</label>
+                        <input type="number" id="gridCols" value="12" min="1" max="100" step="1">
+                    </div>
+
+                    <div class="control-group">
+                        <label for="spacing">패널 간격 (mm)</label>
+                        <input type="number" id="spacing" value="50" min="0" max="1000" step="10">
+                    </div>
+
+                    <div class="control-group">
+                        <label for="rotation">회전 (도)</label>
+                        <input type="range" id="rotation" value="0" min="0" max="360" step="1">
+                        <span class="value-display" id="rotationValue">0°</span>
+                    </div>
+
+                    <div class="control-group">
+                        <label for="scale">이미지 해상도</label>
+                        <input type="text" id="scaleInfo" value="자동 계산됨" readonly>
+                        <small>카카오맵 레벨 2: 약 0.30m/픽셀</small>
+                    </div>
+                </div>
+
+
+            </aside>
+
+            <!-- 카카오맵 StaticMap (숨김, 캡처용) -->
+            <div id="kakaoStaticMap" style="position:absolute; left:-9999px; top:-9999px; width:640px; height:640px;"></div>
+
+            <!-- 중앙: 캔버스 -->
+            <div class="canvas-container">
+                <canvas id="canvas"></canvas>
+                <div class="canvas-overlay" id="canvasOverlay">
+                    <p>위성사진을 업로드하여 시작하세요</p>
+                </div>
+            </div>
+
+            <!-- 우측 패널: 정보 -->
+            <aside class="info-panel">
+
+                <div class="panel-section">
+                    <h2>📐 영역 정보</h2>
+                    <div class="info-grid">
+                        <div class="info-item">
+                            <span class="info-label">영역 면적</span>
+                            <span class="info-value" id="polygonArea">0 m²</span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-label">예상 패널 수</span>
+                            <span class="info-value" id="estimatedPanels">0</span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-label">예상 설치 용량</span>
+                            <span class="info-value" id="estimatedPower">0 kW</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="panel-section">
+                    <h2>🔧 작업</h2>
+                    <div class="action-buttons">
+                        <button class="action-btn" id="clearBtn">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2">
+                                <polyline points="3 6 5 6 21 6"></polyline>
+                                <path
+                                    d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2">
+                                </path>
+                            </svg>
+                            모두 지우기
+                        </button>
+                        <button class="action-btn" id="undoBtn">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2">
+                                <path d="M3 7v6h6"></path>
+                                <path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13"></path>
+                            </svg>
+                            실행 취소
+                        </button>
+                        <button class="action-btn primary" id="printBtn">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2">
+                                <polyline points="6 9 6 2 18 2 18 9"></polyline>
+                                <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path>
+                                <rect x="6" y="14" width="12" height="8"></rect>
+                            </svg>
+                            인쇄
+                        </button>
+                    </div>
+                </div>
+
+                <div class="panel-section">
+                    <h2>💡 사용 방법</h2>
+                    <p>좌측에서 주소를 검색하여 위성사진을 불러옵니다.</p>
+                    <p>패널 모델을 선택하고 "영역 (면적)" 모드로 설치할 영역을 지정하면 우측에서 예상 면적 및 용량을 확인하고 인쇄할 수 있습니다.</p>
+                    <p>전체 면적으로 계산된 것이므로 참고용으로만 사용하세요.</p>
+                </div>
+            </aside>
+        </div>
+    </div>
+
+    <script src="app.20260213u.js"></script>
+</body>
+
+</html>
